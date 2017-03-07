@@ -23,10 +23,10 @@ In Android Studio (under edit) File -> New Module -> Import .JAR/.AAR, import th
 In your project build.gradle (not the top level one, the one under 'app' module) add the following (in the dependencies section):
 
 ```xml
-dependencies { 
-	compile project(':mepplibrary-release_1.0')
-	compile 'com.kontaktio:sdk:3.1.1'
-    compile 'com.google.android.gms:play-services-analytics:8.3.0'
+dependencies {
+	compile project(':mepplibrary-release_1.2.0')
+	compile 'com.kontaktio:sdk:3.2.1'
+	compile 'com.google.android.gms:play-services-analytics:8.3.0'
     }
 ```
 
@@ -86,7 +86,7 @@ Enable the SDK Scanning service in the application section of the manifest.
 
 ### Step 5: Adding Broadcast Receiver
 
-To receive log events and (beacon) content from the SDK, it's necessary to add a Broadcast receiver to the application section in your app's manifest. The action filter for log output is `your.package.name` + `.log`, for example `com.mopius.mepp.demo.log`. For receiving content it's `your.package.name` + `.content`, for example `com.mopius.mepp.demo.content`
+To receive log events and (beacon or geofence) content from the SDK, it's necessary to add a Broadcast receiver to the application section in your app's manifest. The action filter for log output is `your.package.name` + `.log`, for example `com.mopius.mepp.demo.log`. For receiving content it's `your.package.name` + `.content`, for example `com.mopius.mepp.demo.content`
 
 ```xml
 <receiver
@@ -118,7 +118,7 @@ When the App gets closed, please don't forget to call the MeppManager's `shutDow
 
 ### Receiving Broadcasts (Logs & Content)
 
-Like in Step 5 of the guide stated, the SDK delivers a beacon's content via a broadcast. The following code snipped shows, how to extract a `MeppContent` object out of a broadcast within the `onReceive` Method. The intent bundle holds the SDK's log information as a String object, you can get the name of it with `Broadcasts.getLogFilter(context)` which is **your.package.name.log**. The content object is a serializable extra which can be deserialized by the name **your.package.name.content** or simply call `Broadcasts.getContentFilter(context)`.
+Like in Step 5 of the guide stated, the SDK delivers beacon or geofence content via a broadcast. The following code snipped shows, how to extract a `MeppContent` object out of a broadcast within the `onReceive` Method. The intent bundle holds the SDK's log information as a String object, you can get the name of it with `Broadcasts.getLogFilter(context)` which is `your.package.name.log`. The content object is a serializable extra which can be deserialized by the name `your.package.name.content` or simply call `Broadcasts.getContentFilter(context)`.
 
 ```java
 @Override
@@ -185,7 +185,6 @@ IContentListener() {
 
 The callback method of the `ContentListener` gets called after every request, no mather if it was successful or not. On a successful request the `MeppContent` object is prefilled, not null and the `ErrorMessage` String is empty. If something went wrong, the `MeppContent` object is null and an error message was generated.
 
-
 ### Handle NFC content
 
 To handle NFC content the NFC permission is required:
@@ -193,24 +192,34 @@ To handle NFC content the NFC permission is required:
 ```xml
 <uses-permission android:name="android.permission.NFC" />
 ```
+To handle incoming NFC intents you need to define an intent filter in your manifest file:
+```xml
+<intent-filter>
+    <action android:name="android.nfc.action.NDEF_DISCOVERED" />
+    <category android:name="android.intent.category.DEFAULT" />
+    <data android:scheme="https" android:host="mepp.at" android:path="/nfc"/>
+    <data android:scheme="http" android:host="mepp.at" android:path="/nfc"/>
+</intent-filter>
+```
 
-The SDK supports handling NFC content. To do so, get an instance of the `MeppManager` and call the `handleNfcIntent([Intent], [ContentListener])` method in `onCreate()` and `onNewIntent()` of the activity where you want to handle the NFC content. This method takes two arguments. The first one is an intent, and the second one is a listener which gets called when the webrequest finished:
+The SDK supports handling NFC content. To do so, get an instance of the `MeppManager` and call the `handleNfcIntent([Intent], [HardwareListener])` method in `onCreate()` and `onNewIntent()` of the activity where you want to handle the NFC content. This method takes two arguments. The first one is an intent, and the second one is a listener which gets called when the webrequest finished:
 
 ```java
 mMeppManager.handleNfcIntent(getIntent(), this);
 ```
-The callback method of the `ContentListener` looks like this:
+The callback method of the `HardwareListener` looks like this:
 
 ```java
-IContentListener() {
+
+IWSRGetHardwareListener() {
     @Override
-    public void onContentReceived(MeppContent _content, String _errorMessage) {
+    public void onHardwareReceived(HardwareWSRResponse _response, String _errorMessage) {
         // do something
     }
 }
 ```
 
-The callback method of the `ContentListener` gets called after every request, no mather if it was successful or not. On a successful request the `MeppContent` object is prefilled, not null and the `ErrorMessage` String is empty. If something went wrong, the `MeppContent` object is null and an error message was generated.
+The callback method of the `HardwareListener` gets called after every request, no mather if it was successful or not. On a successful request the `HardwareWSRResponse` object is prefilled, not null and the `ErrorMessage` String is empty. If something went wrong, the `HardwareWSRResponse` object is null and an error message was generated.
 
 To handle NFC content in foreground you have to get an instance of the `MeppManager` and call the `setupForegroundDispatch([Context])` in  `onResume()` and `stopForegroundDispatch([Context])` in `onPause()` of the activity where you want to handle NFC content in foreground:
 
@@ -222,6 +231,63 @@ mMeppManager.setupForegroundDispatch(this);
 mMeppManager.stopForegroundDispatch(this);
 ```
 
+### Handle QR content
+
+To handle incoming QR intents you need to define an intent filter in your manifest file:
+```xml
+<intent-filter>
+    <action android:name="android.intent.action.VIEW"/>
+    <category android:name="android.intent.category.DEFAULT"/>
+    <category android:name="android.intent.category.BROWSABLE"/>
+    <data android:scheme="https" android:host="mepp.at" android:path="/qr"/>
+    <data android:scheme="http" android:host="mepp.at" android:path="/qr"/>
+</intent-filter>
+```
+The SDK supports requesting content by a specific QR-Code URI. To do so, get an instance of the `MeppManager` and call the `fetchContentByHardwareQr([HardwareListener], [URI])` method. This method takes two arguments. The first one is a listener which gets called when the webrequest finished, and the second one is the URI saved on the QR-Code:
+
+```java
+mMeppManager.fetchContentByHardwareQr(this, "https://mepp.at/qr?id=1234asdf");
+```
+
+The callback method of the `HardwareListener` looks like this:
+
+```java
+
+IWSRGetHardwareListener() {
+    @Override
+    public void onHardwareReceived(HardwareWSRResponse _response, String _errorMessage) {
+        // do something
+    }
+}
+```
+
+The callback method of the `HardwareListener` gets called after every request, no mather if it was successful or not. On a successful request the `HardwareWSRResponse` object is prefilled, not null and the `ErrorMessage` String is empty. If something went wrong, the `HardwareWSRResponse` object is null and an error message was generated.
+
+### Handle Geofence content
+
+To use geofences in your application add the following (in the dependencies section)
+in your project build.gradle (not the top level one, the one under 'app' module):
+
+```xml
+dependencies {
+         compile 'com.squareup:otto:1.3.8'
+         compile 'com.google.android.gms:play-services-awareness:9.8.0'
+    }
+```
+
+To handle geofences, enable the transition service in the application section of the manifest.
+
+```xml
+<service
+ android:name="com.mopius.mepplibrary.controller.MeppGeofenceTransitionsIntentService"
+ android:exported="false" />
+```
+
+To start scanning for geofences, just call `startGeofencing()` on the `MeppManager` instance. Later on you can stop the scan procedure with `stopGeofencing()`. Or you can just use the `startGeofencing` parameter of the `MeppManager` constructor to start scanning for geofences.
+
+Like in Step 5 of the guide stated, the SDK delivers a geofence's content via a broadcast.
+You gonna receive a content broadcast on a geofence transition if you have set enter or exit content for the geofence.
+See "Receiving Broadcasts (Logs & Content)" for more information about how to receive SDK broadcasts.
 
 ## Data structure
 
@@ -322,11 +388,16 @@ mMeppManager.stopForegroundDispatch(this);
     
 ### Changelog
 
+v1.2.0
+- Geofence and QR support
+- Clear SDK cache method added (`mMeppManager.clearSDKCaches()`)
+- Kontakt.io SDK update (update your build.gradle (in the dependencies section) `compile 'com.kontaktio:sdk:3.2.1'`)
+
 v1.1.0
-- NFC Support
+- NFC support
 - Action filters for Broadcast Receiver changed to `your.package.name.log` and `your.package.name.content` (see step 5)
 - Methods to get the correct action filters added (see "Receiving Broadcasts (Logs & Content)")
-- If you use an Application Object you no longer need to extend MEPPApplication
+- If you use an application object you no longer need to extend MEPPApplication
 
 v1.0.0
 - Initial release
@@ -335,4 +406,4 @@ v1.0.0
 **Thanks for using M.E.P.P.**<br>
 If you have any troubles integrating or running the SDK, please feel free to contact us!<br>
 
-© [Mopius Mobile GmbH](https://www.mopius.com) 2017 - Created on 2017-02-06
+© [Mopius Mobile GmbH](https://www.mopius.com) 2017 - Created on 2017-03-07
