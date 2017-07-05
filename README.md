@@ -13,7 +13,7 @@ This guide will take you through the process of adding the SDK to your Android a
 
 ### Requirements
 
-It assumes that you have an Android project using Android Studio. The SDK builds from Android 4.0.3 (15) and works from Android 4.3 (18) onwards. The SDK will be provided as an aar package.
+It assumes that you have an Android project using Android Studio. The SDK builds from Android 4.3 (18) onwards. The SDK will be provided as an aar package.
 
 
 ### Step 1: Adding the SDK to your project
@@ -24,9 +24,13 @@ In your project build.gradle (not the top level one, the one under 'app' module)
 
 ```xml
 dependencies {
-	compile project(':mepplibrary-release_1.2.0')
-	compile 'com.kontaktio:sdk:3.2.1'
-	compile 'com.google.android.gms:play-services-analytics:8.3.0'
+    compile project(':mepplibrary-release_1.3.0')
+    compile 'com.google.android.gms:play-services-analytics:10.0.1'
+    compile 'com.google.android.gms:play-services-awareness:10.0.1'
+    compile 'com.squareup.okhttp3:okhttp:3.2.0'
+    compile 'com.squareup:otto:1.3.8'
+    compile 'org.altbeacon:android-beacon-library:2.8.1'
+    compile 'com.google.code.gson:gson:2.8.0'
     }
 ```
 
@@ -73,6 +77,14 @@ Your AndroidManifest.xml needs some additional meta information for configuratio
     android:value="$your_google_analytics_ua_here$" />
 ```
 
+Optional you can set a beacon scan interval in seconds as meta data. If you don't set an interval in the manifest, the default scan interval of 120 seconds will be used.
+
+```xml
+<meta-data
+    android:name="mepp.beacon.scan.interval"
+    android:value="60" />
+```
+
 ### Step 4: Registering Service
 
 Enable the SDK Scanning service in the application section of the manifest.
@@ -101,8 +113,7 @@ To receive log events and (beacon or geofence) content from the SDK, it's necess
 
 ### Step 6: Handle device reboots
 
-As the scanning part of the SDK needs to be restarted after the user rebooted his/her device, you need to either create a Bootreceiver or add the startup logic of the SDK to your existing one.
-
+The SDK takes care of device reboots. If you have started scanning for beacons or geofences before the user is rebooting his/her device, the SDK will automatically restart scanning after the reboot is finished.  
 
 ## Usage
 
@@ -387,6 +398,11 @@ See "Receiving Broadcasts (Logs & Content)" for more information about how to re
 	This is the beacons minor ID
     
 ### Changelog
+
+v1.3.0
+- Set background scan interval in manifest
+- Restart scanning after device reboot 
+- Removed Kontakt.io SDK
 
 v1.2.0
 - Geofence and QR support
